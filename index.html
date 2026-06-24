@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Code Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #13131c; --border: #2a2a3d;
+      --accent: #7c3aed; --accent2: #06b6d4; --text: #f0f0ff;
+      --muted: #6b6b8a; --glow: rgba(124,58,237,0.35);
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Syne', sans-serif; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 40px 20px 60px; position: relative; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(124,58,237,0.04) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(124,58,237,0.04) 1px,transparent 1px);
+      background-size: 48px 48px; pointer-events: none; z-index: 0;
+    }
+    .orb { position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0; }
+    .orb1 { width:400px;height:400px;background:rgba(124,58,237,0.18);top:-100px;left:-100px; }
+    .orb2 { width:300px;height:300px;background:rgba(6,182,212,0.12);bottom:0;right:-80px; }
+    .container { position:relative;z-index:1;width:100%;max-width:580px; }
+
+    header { text-align:center;margin-bottom:44px; }
+    .badge {
+      display:inline-block; font-family:'DM Mono',monospace; font-size:11px;
+      letter-spacing:.2em; color:var(--accent2); border:1px solid rgba(6,182,212,.3);
+      padding:5px 14px; border-radius:999px; margin-bottom:20px; background:rgba(6,182,212,.06);
+    }
+    h1 {
+      font-size:clamp(2rem,6vw,3.2rem); font-weight:800; letter-spacing:-.02em; line-height:1.1;
+      background:linear-gradient(135deg,#fff 0%,var(--accent2) 60%,var(--accent) 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:12px;
+    }
+    .subtitle { color:var(--muted); font-size:14px; font-weight:400; line-height:1.6; }
+
+    .card {
+      background:var(--surface); border:1px solid var(--border); border-radius:20px;
+      padding:28px 28px 32px; margin-bottom:20px;
+      box-shadow:0 0 0 1px rgba(255,255,255,.03),0 20px 60px rgba(0,0,0,.5);
+    }
+    .card-title {
+      font-size:11px; font-weight:700; letter-spacing:.15em; color:var(--muted);
+      text-transform:uppercase; margin-bottom:20px; display:flex; align-items:center; gap:8px;
+    }
+    .card-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    /* Tabs */
+    .tabs {
+      display:flex; gap:6px; margin-bottom:24px;
+      background:rgba(255,255,255,.04); padding:5px; border-radius:12px; flex-wrap:wrap;
+    }
+    .tab {
+      flex:1; min-width:60px; padding:9px 6px; background:transparent; border:none;
+      border-radius:8px; color:var(--muted); font-family:'Syne',sans-serif; font-size:12px;
+      font-weight:600; cursor:pointer; transition:all .2s; letter-spacing:.02em; white-space:nowrap;
+    }
+    .tab.active { background:var(--accent); color:#fff; box-shadow:0 4px 20px var(--glow); }
+    .tab:hover:not(.active) { color:var(--text); background:rgba(255,255,255,.06); }
+
+    /* Fields */
+    .field { margin-bottom:18px; }
+    label {
+      display:block; font-size:11px; font-weight:700; letter-spacing:.1em;
+      color:var(--muted); text-transform:uppercase; margin-bottom:7px;
+    }
+    input[type="text"],input[type="url"],textarea,select {
+      width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border);
+      border-radius:10px; padding:12px 14px; color:var(--text);
+      font-family:'DM Mono',monospace; font-size:13px; outline:none;
+      transition:border-color .2s,box-shadow .2s; resize:none;
+    }
+    input:focus,textarea:focus,select:focus {
+      border-color:var(--accent); box-shadow:0 0 0 3px var(--glow);
+    }
+    textarea { min-height:90px; }
+    select option { background:#1a1a2e; }
+
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    @media(max-width:420px){ .two-col{grid-template-columns:1fr;} }
+
+    /* Error */
+    .error-msg { color:#f87171;font-size:12px;font-family:'DM Mono',monospace;margin-top:5px;display:none; }
+    .error-msg.show { display:block; }
+
+    /* Contact banner */
+    .info-banner {
+      background:rgba(6,182,212,.08); border:1px solid rgba(6,182,212,.2);
+      border-radius:10px; padding:11px 14px; font-size:12px;
+      color:var(--accent2); margin-bottom:18px; line-height:1.5;
+    }
+
+    /* ── DESIGN SECTION ── */
+    .section-divider {
+      border:none; border-top:1px solid var(--border); margin:24px 0;
+    }
+
+    /* Style picker pills */
+    .style-grid {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:6px;
+    }
+    .style-btn {
+      position:relative; padding:0; border:2px solid var(--border);
+      border-radius:10px; background:rgba(255,255,255,.03); cursor:pointer;
+      transition:all .2s; overflow:hidden; aspect-ratio:1;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    }
+    .style-btn:hover { border-color:var(--accent); background:rgba(124,58,237,.08); }
+    .style-btn.selected { border-color:var(--accent); background:rgba(124,58,237,.14); box-shadow:0 0 0 1px var(--accent); }
+    .style-btn svg { width:38px; height:38px; }
+    .style-btn span { font-size:10px; font-weight:700; letter-spacing:.05em; color:var(--muted); }
+    .style-btn.selected span { color:var(--accent2); }
+
+    /* Corner style picker */
+    .corner-grid {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
+    }
+    .corner-btn {
+      border:2px solid var(--border); border-radius:10px; background:rgba(255,255,255,.03);
+      cursor:pointer; transition:all .2s; padding:10px 6px;
+      display:flex; flex-direction:column; align-items:center; gap:5px;
+    }
+    .corner-btn:hover { border-color:var(--accent); }
+    .corner-btn.selected { border-color:var(--accent); background:rgba(124,58,237,.14); }
+    .corner-btn svg { width:30px; height:30px; }
+    .corner-btn span { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.04em; }
+    .corner-btn.selected span { color:var(--accent2); }
+
+    /* Color pickers */
+    .color-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .color-field {
+      display:flex; align-items:center; gap:10px;
+      background:rgba(255,255,255,.04); border:1px solid var(--border);
+      border-radius:10px; padding:10px 14px;
+    }
+    input[type="color"] {
+      width:30px; height:30px; border:none; border-radius:6px;
+      cursor:pointer; background:transparent; padding:0; flex-shrink:0;
+    }
+    .color-label { font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+
+    /* Gradient toggle */
+    .toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .toggle-label { font-size:12px; font-weight:700; color:var(--text); }
+    .toggle-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .toggle {
+      position:relative; width:44px; height:24px; flex-shrink:0;
+    }
+    .toggle input { opacity:0; width:0; height:0; }
+    .toggle-track {
+      position:absolute; inset:0; background:var(--border); border-radius:999px;
+      cursor:pointer; transition:background .2s;
+    }
+    .toggle-track::after {
+      content:''; position:absolute; top:3px; left:3px; width:18px; height:18px;
+      background:#fff; border-radius:50%; transition:transform .2s;
+    }
+    .toggle input:checked ~ .toggle-track { background:var(--accent); }
+    .toggle input:checked ~ .toggle-track::after { transform:translateX(20px); }
+
+    .gradient-colors { display:none; }
+    .gradient-colors.show { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
+
+    /* Size slider */
+    .size-row { display:flex; align-items:center; gap:14px; }
+    input[type="range"] {
+      flex:1; -webkit-appearance:none; height:4px; border-radius:999px;
+      background:var(--border); outline:none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+      background:var(--accent); cursor:pointer; box-shadow:0 0 8px var(--glow);
+    }
+    .size-val { font-family:'DM Mono',monospace; font-size:12px; color:var(--accent2); min-width:54px; text-align:right; }
+
+    /* Logo upload */
+    .logo-upload-area {
+      border:2px dashed var(--border); border-radius:10px; padding:16px;
+      text-align:center; cursor:pointer; transition:all .2s; position:relative;
+    }
+    .logo-upload-area:hover { border-color:var(--accent); background:rgba(124,58,237,.06); }
+    .logo-upload-area input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .logo-upload-area .upload-icon { font-size:22px; margin-bottom:6px; }
+    .logo-upload-area .upload-text { font-size:12px; color:var(--muted); font-weight:600; }
+    .logo-preview {
+      display:none; align-items:center; gap:10px; background:rgba(255,255,255,.04);
+      border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-top:8px;
+    }
+    .logo-preview.show { display:flex; }
+    .logo-preview img { width:36px; height:36px; border-radius:6px; object-fit:cover; }
+    .logo-preview-name { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .logo-remove {
+      background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.2);
+      color:#f87171; font-size:11px; font-weight:700; padding:4px 10px;
+      border-radius:6px; cursor:pointer; transition:all .2s;
+    }
+    .logo-remove:hover { background:rgba(248,113,113,.2); }
+
+    /* Margin toggle */
+    .margin-row { display:flex; align-items:center; gap:10px; }
+    .margin-btn {
+      flex:1; padding:9px; border:2px solid var(--border); border-radius:8px;
+      background:transparent; color:var(--muted); font-family:'Syne',sans-serif;
+      font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; letter-spacing:.05em;
+    }
+    .margin-btn.selected { border-color:var(--accent); background:rgba(124,58,237,.1); color:var(--text); }
+
+    /* Generate btn */
+    .btn-generate {
+      width:100%; padding:16px; background:linear-gradient(135deg,var(--accent),#9333ea);
+      border:none; border-radius:12px; color:#fff; font-family:'Syne',sans-serif;
+      font-size:15px; font-weight:700; letter-spacing:.05em; cursor:pointer;
+      transition:all .2s; position:relative; overflow:hidden; box-shadow:0 8px 30px var(--glow);
+    }
+    .btn-generate::before {
+      content:''; position:absolute; inset:0;
+      background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);
+      opacity:0; transition:opacity .2s;
+    }
+    .btn-generate:hover { transform:translateY(-2px); box-shadow:0 12px 40px var(--glow); }
+    .btn-generate:hover::before { opacity:1; }
+    .btn-generate:active { transform:translateY(0); }
+
+    /* Output */
+    .qr-output { display:none; flex-direction:column; align-items:center; gap:18px; animation:fadeUp .4s ease; }
+    .qr-output.show { display:flex; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+    .qr-frame {
+      border-radius:16px; padding:20px; background:#fff;
+      box-shadow:0 0 0 1px rgba(255,255,255,.1),0 20px 60px rgba(0,0,0,.5),0 0 80px var(--glow);
+      position:relative;
+    }
+    .qr-frame::before {
+      content:''; position:absolute; inset:-2px; border-radius:18px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); z-index:-1;
+    }
+    #qrcode { display:flex; align-items:center; justify-content:center; }
+    #qrcode canvas,#qrcode svg { display:block; }
+
+    .qr-meta {
+      text-align:center; font-family:'DM Mono',monospace; font-size:11px;
+      color:var(--muted); max-width:280px; word-break:break-all; line-height:1.6;
+    }
+    .qr-actions { display:flex; gap:10px; width:100%; }
+    .btn-action {
+      flex:1; padding:12px; border-radius:10px; border:1px solid var(--border);
+      background:rgba(255,255,255,.04); color:var(--text); font-family:'Syne',sans-serif;
+      font-size:13px; font-weight:600; cursor:pointer; transition:all .2s;
+      display:flex; align-items:center; justify-content:center; gap:7px;
+    }
+    .btn-action:hover { background:rgba(255,255,255,.08); border-color:var(--accent); color:var(--accent2); }
+    .btn-action.primary { background:rgba(6,182,212,.12); border-color:rgba(6,182,212,.3); color:var(--accent2); }
+    .btn-action.primary:hover { background:rgba(6,182,212,.22); }
+
+    footer {
+      position:relative; z-index:1; text-align:center; color:var(--muted);
+      font-size:12px; margin-top:16px; font-family:'DM Mono',monospace; letter-spacing:.05em;
+    }
+
+    /* ── Adsterra Ad Placeholders ── */
+    .ad-slot {
+      width: 100%; text-align: center;
+      margin: 4px 0; position: relative; z-index: 1;
+    }
+    .ad-placeholder {
+      background: repeating-linear-gradient(
+        45deg, rgba(124,58,237,0.04), rgba(124,58,237,0.04) 6px,
+        rgba(6,182,212,0.03) 6px, rgba(6,182,212,0.03) 12px
+      );
+      border: 1px dashed rgba(124,58,237,0.25);
+      border-radius: 10px; padding: 14px 10px;
+      color: var(--muted); font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: 0.08em;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px;
+      min-height: 60px;
+    }
+    .ad-placeholder .ad-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.15em;
+      color: rgba(124,58,237,0.5); text-transform: uppercase;
+    }
+    .ad-placeholder .ad-size {
+      font-size: 11px; color: rgba(106,106,138,0.7);
+    }
+
+    /* WhatsApp template buttons */
+    .wa-tpl-btn {
+      padding:7px 13px; border:1px solid rgba(37,211,102,.3); border-radius:999px;
+      background:rgba(37,211,102,.07); color:#25d366; font-family:'Syne',sans-serif;
+      font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; letter-spacing:.03em;
+    }
+    .wa-tpl-btn:hover { background:rgba(37,211,102,.18); border-color:#25d366; }
+    .wa-tpl-btn.wa-tpl-clear { border-color:rgba(248,113,113,.3); color:#f87171; background:rgba(248,113,113,.07); }
+    .wa-tpl-btn.wa-tpl-clear:hover { background:rgba(248,113,113,.18); }
+
+
+    /* ── Border styles ── */
+    .border-style-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    }
+    .border-style-btn {
+      border: 2px solid var(--border); border-radius: 10px;
+      background: rgba(255,255,255,.03); cursor: pointer; transition: all .2s;
+      padding: 10px 6px; display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+    }
+    .border-style-btn:hover { border-color: var(--accent); }
+    .border-style-btn.selected { border-color: var(--accent); background: rgba(124,58,237,.14); }
+    .border-style-btn svg { width: 36px; height: 36px; }
+    .border-style-btn span { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+    .border-style-btn.selected span { color: var(--accent2); }
+
+    .border-preview-wrap {
+      display: flex; justify-content: center; align-items: center;
+      padding: 20px; background: rgba(255,255,255,.03);
+      border: 1px solid var(--border); border-radius: 12px; margin-top: 6px;
+    }
+    #border-preview-box {
+      width: 80px; height: 80px; background: #e5e7eb;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: #666; font-family: 'DM Mono', monospace;
+      transition: all .3s;
+    }
+
+    .toast {
+      position:fixed; bottom:32px; left:50%;
+      transform:translateX(-50%) translateY(20px);
+      background:var(--accent); color:#fff; padding:10px 24px;
+      border-radius:999px; font-size:13px; font-weight:600;
+      opacity:0; transition:all .3s; pointer-events:none; z-index:100;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* Preset themes */
+    .preset-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+    .preset-btn {
+      border-radius:10px; border:2px solid var(--border); cursor:pointer;
+      height:48px; transition:all .2s; position:relative; overflow:hidden;
+    }
+    .preset-btn:hover { transform:scale(1.06); }
+    .preset-btn.selected { border-color:#fff; box-shadow:0 0 0 2px var(--accent); }
+    .preset-btn span {
+      position:absolute; bottom:3px; left:0; right:0; text-align:center;
+      font-size:9px; font-weight:700; letter-spacing:.04em;
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+
+  <div class="container">
+    <header>
+      <div class="badge">⚡ INSTANT QR GENERATOR</div>
+      <h1>QR Code<br/>तयार करा</h1>
+      <p class="subtitle">Link, Text, WiFi, Contact → QR Code<br/>Custom Design सहित!</p>
+    </header>
+
+
+    <!-- ═══ AD SLOT AD-1 ═══ -->
+    <div class="ad-slot">
+      <!-- ✅ ADSTERRA BANNER AD — AD-1 -->
+      <!-- Replace इथून खाली -->
+      <!-- <script type="text/javascript">
+        atOptions = { 'key': 'YOUR_KEY_AD-1', 'format': 'iframe', 'height': 60, 'width': 468, 'params': {} };
+      </script>
+      <script type="text/javascript" src="//www.highperformanceformat.com/YOUR_KEY_AD-1/invoke.js"></script> -->
+      <!-- Replace इथपर्यंत -->
+      <!-- 👇 Placeholder — real ad code replace करताना हा div काढा -->
+      <div class="ad-placeholder">
+        <span class="ad-label">📢 Adsterra · AD-1</span>
+        <span class="ad-size">Top Banner (728×90 / 320×50)</span>
+      </div>
+    </div>
+    <!-- ── CONTENT CARD ── -->
+    <div class="card">
+      <div class="card-title">📄 Content</div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('link',this)">🔗 Link</button>
+        <button class="tab" onclick="switchTab('text',this)">📝 Text</button>
+        <button class="tab" onclick="switchTab('wifi',this)">📶 WiFi</button>
+        <button class="tab" onclick="switchTab('contact',this)">👤 Contact</button>
+        <button class="tab" onclick="switchTab('whatsapp',this)">💬 WhatsApp</button>
+      
+      </div>
+
+      <!-- Link -->
+      <div id="tab-link">
+        <div class="field">
+          <label>Website URL</label>
+          <input type="url" id="input-link" placeholder="https://example.com" />
+          <div class="error-msg" id="err-link">⚠ Valid URL टाका (https:// सहित)</div>
+        </div>
+      </div>
+
+      <!-- Text -->
+      <div id="tab-text" style="display:none">
+        <div class="field">
+          <label>कोणताही Text</label>
+          <textarea id="input-text" placeholder="मराठी, English, नंबर — सर्व चालेल!"></textarea>
+          <div class="error-msg" id="err-text">⚠ काहीतरी text टाका</div>
+        </div>
+      </div>
+
+      <!-- WiFi -->
+      <div id="tab-wifi" style="display:none">
+        <div class="field"><label>WiFi नाव (SSID)</label><input type="text" id="input-ssid" placeholder="माझे WiFi" /></div>
+        <div class="field"><label>Password</label><input type="text" id="input-pass" placeholder="password123" /></div>
+        <div class="field">
+          <label>Security Type</label>
+          <select id="input-sec">
+            <option value="WPA">WPA/WPA2</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">Open (No Password)</option>
+          </select>
+        </div>
+        <div class="error-msg" id="err-wifi">⚠ WiFi नाव टाका</div>
+      </div>
+
+      <!-- Contact -->
+      <div id="tab-contact" style="display:none">
+        <div class="info-banner">👤 Scan केल्यावर phone मध्ये contact directly save होईल (vCard format)</div>
+        <div class="two-col">
+          <div class="field"><label>पहिले नाव *</label><input type="text" id="c-first" placeholder="राहुल" /></div>
+          <div class="field"><label>आडनाव</label><input type="text" id="c-last" placeholder="शर्मा" /></div>
+        </div>
+        <div class="field"><label>मोबाईल नंबर *</label><input type="text" id="c-phone" placeholder="+91 98765 43210" /></div>
+        <div class="field"><label>Email</label><input type="text" id="c-email" placeholder="rahul@example.com" /></div>
+        <div class="two-col">
+          <div class="field"><label>Company</label><input type="text" id="c-org" placeholder="ABC Company" /></div>
+          <div class="field"><label>Job Title</label><input type="text" id="c-title" placeholder="Manager" /></div>
+        </div>
+        <div class="field"><label>Website</label><input type="text" id="c-url" placeholder="https://example.com" /></div>
+        <div class="field"><label>पत्ता</label><textarea id="c-addr" placeholder="पुणे, महाराष्ट्र" style="min-height:60px"></textarea></div>
+        <div class="error-msg" id="err-contact">⚠ नाव आणि मोबाईल नंबर आवश्यक आहे</div>
+      </div>
+
+      <!-- WhatsApp -->
+      <div id="tab-whatsapp" style="display:none">
+        <div class="info-banner" style="background:rgba(37,211,102,.08);border-color:rgba(37,211,102,.25);color:#25d366;">
+          💬 QR scan केल्यावर WhatsApp direct उघडेल — pre-filled message सहित!
+        </div>
+        <div class="field">
+          <label>WhatsApp नंबर *</label>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select id="wa-country" onchange="updateWAPreview()" style="width:110px;flex-shrink:0;padding:12px 10px;font-size:12px">
+              <option value="91">🇮🇳 +91</option>
+              <option value="1">🇺🇸 +1</option>
+              <option value="44">🇬🇧 +44</option>
+              <option value="61">🇦🇺 +61</option>
+              <option value="971">🇦🇪 +971</option>
+              <option value="65">🇸🇬 +65</option>
+              <option value="60">🇲🇾 +60</option>
+              <option value="92">🇵🇰 +92</option>
+              <option value="880">🇧🇩 +880</option>
+              <option value="94">🇱🇰 +94</option>
+              <option value="977">🇳🇵 +977</option>
+            </select>
+            <input type="text" id="wa-phone" placeholder="98765 43210" style="flex:1" oninput="updateWAPreview()" />
+          </div>
+          <div class="error-msg" id="err-whatsapp">⚠ Valid WhatsApp नंबर टाका</div>
+        </div>
+        <div class="field">
+          <label>Pre-filled Message (optional)</label>
+          <textarea id="wa-msg" placeholder="नमस्कार! मी QR scan करून तुम्हाला message करत आहे 🙏" style="min-height:90px" oninput="updateWAPreview()"></textarea>
+        </div>
+        <div class="field">
+          <label>Quick Templates</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="wa-tpl-btn" onclick="setWATemplate('नमस्कार! आपल्याशी बोलायचे होते 🙏')">🙏 नमस्कार</button>
+            <button class="wa-tpl-btn" onclick="setWATemplate('Hi! I scanned your QR code 😊')">👋 Hi!</button>
+            <button class="wa-tpl-btn" onclick="setWATemplate('आपली Price List पाठवाल का?')">&#x1f4b0; Price List</button>
+            <button class="wa-tpl-btn" onclick="setWATemplate('मला आपल्या Product बद्दल माहिती हवी आहे.')">&#x1f4e6; Product Info</button>
+            <button class="wa-tpl-btn" onclick="setWATemplate('Appointment बुक करायची आहे.')">&#x1f4c5; Appointment</button>
+            <button class="wa-tpl-btn wa-tpl-clear" onclick="setWATemplate('')">&#x2715; Clear</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>WhatsApp Link Preview</label>
+          <div id="wa-preview" style="background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.2);border-radius:10px;padding:12px 14px;font-family:'DM Mono',monospace;font-size:11px;color:#25d366;word-break:break-all;line-height:1.6;min-height:42px">
+            नंबर टाकल्यावर link इथे दिसेल...
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══ AD SLOT AD-2 ═══ -->
+    <div class="ad-slot">
+      <!-- ✅ ADSTERRA NATIVE AD — AD-2 -->
+      <!-- Replace इथून खाली -->
+      <!-- <script async="async" data-cfasync="false" src="//pl00000000.net/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/invoke.js"></script> -->
+      <!-- Replace इथपर्यंत -->
+      <!-- 👇 Placeholder — real ad code replace करताना हा div काढा -->
+      <div class="ad-placeholder">
+        <span class="ad-label">📢 Adsterra · AD-2</span>
+        <span class="ad-size">Native / Square (300×250)</span>
+      </div>
+    </div>
+    <!-- ── DESIGN CARD ── -->
+    <div class="card">
+      <div class="card-title">🎨 Design</div>
+
+      <!-- Preset Themes -->
+      <div class="field">
+        <label>Quick Themes</label>
+        <div class="preset-grid" id="preset-grid">
+          <button class="preset-btn selected" data-preset="classic"   style="background:#fff"                    onclick="applyPreset('classic',this)"><span style="color:#000">Classic</span></button>
+          <button class="preset-btn"           data-preset="midnight" style="background:linear-gradient(135deg,#1a1a2e,#16213e)" onclick="applyPreset('midnight',this)"><span style="color:#fff">Night</span></button>
+          <button class="preset-btn"           data-preset="fire"     style="background:linear-gradient(135deg,#ff6b35,#f7931e)" onclick="applyPreset('fire',this)"><span style="color:#fff">Fire</span></button>
+          <button class="preset-btn"           data-preset="ocean"    style="background:linear-gradient(135deg,#0077b6,#00b4d8)" onclick="applyPreset('ocean',this)"><span style="color:#fff">Ocean</span></button>
+          <button class="preset-btn"           data-preset="forest"   style="background:linear-gradient(135deg,#1b4332,#40916c)" onclick="applyPreset('forest',this)"><span style="color:#fff">Forest</span></button>
+          <button class="preset-btn"           data-preset="candy"    style="background:linear-gradient(135deg,#f72585,#b5179e)" onclick="applyPreset('candy',this)"><span style="color:#fff">Candy</span></button>
+          <button class="preset-btn"           data-preset="gold"     style="background:linear-gradient(135deg,#f9c74f,#f3722c)" onclick="applyPreset('gold',this)"><span style="color:#222">Gold</span></button>
+          <button class="preset-btn"           data-preset="violet"   style="background:linear-gradient(135deg,#7c3aed,#06b6d4)" onclick="applyPreset('violet',this)"><span style="color:#fff">Violet</span></button>
+          <button class="preset-btn"           data-preset="bw"       style="background:#000"                    onclick="applyPreset('bw',this)"><span style="color:#fff">Bold</span></button>
+          <button class="preset-btn"           data-preset="custom"   style="background:conic-gradient(red,yellow,lime,cyan,blue,red)" onclick="applyPreset('custom',this)"><span style="color:#fff">Custom</span></button>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- Dot Style -->
+      <div class="field">
+        <label>Dot Style</label>
+        <div class="style-grid" id="dot-style-grid">
+          <button class="style-btn selected" data-val="square" onclick="selectStyle('dot','square',this)">
+            <svg viewBox="0 0 40 40"><rect x="4" y="4" width="8" height="8" fill="currentColor"/><rect x="16" y="4" width="8" height="8" fill="currentColor"/><rect x="28" y="4" width="8" height="8" fill="currentColor"/><rect x="4" y="16" width="8" height="8" fill="currentColor"/><rect x="28" y="16" width="8" height="8" fill="currentColor"/><rect x="4" y="28" width="8" height="8" fill="currentColor"/><rect x="16" y="28" width="8" height="8" fill="currentColor"/><rect x="28" y="28" width="8" height="8" fill="currentColor"/></svg>
+            <span>SQUARE</span>
+          </button>
+          <button class="style-btn" data-val="rounded" onclick="selectStyle('dot','rounded',this)">
+            <svg viewBox="0 0 40 40"><rect x="4" y="4" width="8" height="8" rx="3" fill="currentColor"/><rect x="16" y="4" width="8" height="8" rx="3" fill="currentColor"/><rect x="28" y="4" width="8" height="8" rx="3" fill="currentColor"/><rect x="4" y="16" width="8" height="8" rx="3" fill="currentColor"/><rect x="28" y="16" width="8" height="8" rx="3" fill="currentColor"/><rect x="4" y="28" width="8" height="8" rx="3" fill="currentColor"/><rect x="16" y="28" width="8" height="8" rx="3" fill="currentColor"/><rect x="28" y="28" width="8" height="8" rx="3" fill="currentColor"/></svg>
+            <span>ROUNDED</span>
+          </button>
+          <button class="style-btn" data-val="dots" onclick="selectStyle('dot','dots',this)">
+            <svg viewBox="0 0 40 40"><circle cx="8" cy="8" r="4" fill="currentColor"/><circle cx="20" cy="8" r="4" fill="currentColor"/><circle cx="32" cy="8" r="4" fill="currentColor"/><circle cx="8" cy="20" r="4" fill="currentColor"/><circle cx="32" cy="20" r="4" fill="currentColor"/><circle cx="8" cy="32" r="4" fill="currentColor"/><circle cx="20" cy="32" r="4" fill="currentColor"/><circle cx="32" cy="32" r="4" fill="currentColor"/></svg>
+            <span>DOTS</span>
+          </button>
+          <button class="style-btn" data-val="classy" onclick="selectStyle('dot','classy',this)">
+            <svg viewBox="0 0 40 40"><path d="M4,4 L12,4 L12,12 L4,12 Z M4,6 Q8,4 12,8 Q8,12 4,8 Z" fill="currentColor"/><rect x="16" y="4" width="8" height="8" rx="1" fill="currentColor"/><rect x="28" y="4" width="8" height="8" rx="1" fill="currentColor"/><rect x="4" y="16" width="8" height="8" rx="1" fill="currentColor"/><circle cx="32" cy="20" r="4" fill="currentColor"/><circle cx="8" cy="32" r="4" fill="currentColor"/><rect x="16" y="28" width="8" height="8" rx="4" fill="currentColor"/><rect x="28" y="28" width="8" height="8" rx="1" fill="currentColor"/></svg>
+            <span>CLASSY</span>
+          </button>
+          <button class="style-btn" data-val="classy-rounded" onclick="selectStyle('dot','classy-rounded',this)">
+            <svg viewBox="0 0 40 40"><rect x="4" y="4" width="8" height="8" rx="4" fill="currentColor"/><rect x="16" y="4" width="8" height="8" rx="2" fill="currentColor"/><rect x="28" y="4" width="8" height="8" rx="4" fill="currentColor"/><rect x="4" y="16" width="8" height="8" rx="2" fill="currentColor"/><rect x="28" y="16" width="8" height="8" rx="2" fill="currentColor"/><rect x="4" y="28" width="8" height="8" rx="4" fill="currentColor"/><rect x="16" y="28" width="8" height="8" rx="2" fill="currentColor"/><rect x="28" y="28" width="8" height="8" rx="4" fill="currentColor"/></svg>
+            <span>CLASSY+</span>
+          </button>
+          <button class="style-btn" data-val="extra-rounded" onclick="selectStyle('dot','extra-rounded',this)">
+            <svg viewBox="0 0 40 40"><rect x="2" y="4" width="10" height="8" rx="4" fill="currentColor"/><rect x="15" y="4" width="10" height="8" rx="4" fill="currentColor"/><rect x="28" y="4" width="10" height="8" rx="4" fill="currentColor"/><rect x="2" y="16" width="10" height="8" rx="4" fill="currentColor"/><rect x="28" y="16" width="10" height="8" rx="4" fill="currentColor"/><rect x="2" y="28" width="10" height="8" rx="4" fill="currentColor"/><rect x="15" y="28" width="10" height="8" rx="4" fill="currentColor"/><rect x="28" y="28" width="10" height="8" rx="4" fill="currentColor"/></svg>
+            <span>PILL</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Corner Style -->
+      <div class="field">
+        <label>Corner Style</label>
+        <div class="corner-grid" id="corner-style-grid">
+          <button class="corner-btn selected" data-val="square" onclick="selectStyle('corner','square',this)">
+            <svg viewBox="0 0 30 30"><rect x="2" y="2" width="26" height="26" rx="0" fill="none" stroke="currentColor" stroke-width="3"/><rect x="8" y="8" width="14" height="14" rx="0" fill="currentColor"/></svg>
+            <span>SQUARE</span>
+          </button>
+          <button class="corner-btn" data-val="extra-rounded" onclick="selectStyle('corner','extra-rounded',this)">
+            <svg viewBox="0 0 30 30"><rect x="2" y="2" width="26" height="26" rx="8" fill="none" stroke="currentColor" stroke-width="3"/><rect x="8" y="8" width="14" height="14" rx="3" fill="currentColor"/></svg>
+            <span>ROUNDED</span>
+          </button>
+          <button class="corner-btn" data-val="dot" onclick="selectStyle('corner','dot',this)">
+            <svg viewBox="0 0 30 30"><rect x="2" y="2" width="26" height="26" rx="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="15" cy="15" r="7" fill="currentColor"/></svg>
+            <span>CIRCLE</span>
+          </button>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- Colors -->
+      <div class="field">
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Gradient Color</div>
+            <div class="toggle-sub">दोन रंगांचा gradient</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="gradient-toggle" onchange="toggleGradient(this)" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="color-row" id="solid-colors">
+          <div class="color-field">
+            <input type="color" id="qr-fg" value="#000000" />
+            <span class="color-label">QR Color</span>
+          </div>
+          <div class="color-field">
+            <input type="color" id="qr-bg" value="#ffffff" />
+            <span class="color-label">Background</span>
+          </div>
+        </div>
+
+        <div class="gradient-colors" id="gradient-colors">
+          <div class="color-field">
+            <input type="color" id="grad-c1" value="#7c3aed" />
+            <span class="color-label">Color 1</span>
+          </div>
+          <div class="color-field">
+            <input type="color" id="grad-c2" value="#06b6d4" />
+            <span class="color-label">Color 2</span>
+          </div>
+          <div class="color-field">
+            <input type="color" id="grad-bg" value="#ffffff" />
+            <span class="color-label">Background</span>
+          </div>
+          <div class="color-field" style="grid-column:span 1">
+            <select id="grad-type" style="font-size:11px;padding:8px">
+              <option value="linear">Linear ↘</option>
+              <option value="radial">Radial ◉</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- Logo / Image -->
+      <div class="field">
+        <label>Center Logo (optional)</label>
+        <div class="logo-upload-area" onclick="document.getElementById('logo-input').click()">
+          <input type="file" id="logo-input" accept="image/*" onchange="handleLogoUpload(this)" style="display:none" />
+          <div class="upload-icon">🖼</div>
+          <div class="upload-text">Logo / Icon Upload करा<br/><span style="color:var(--muted);font-size:10px">PNG, JPG, SVG · Max 2MB</span></div>
+        </div>
+        <div class="logo-preview" id="logo-preview">
+          <img id="logo-img-preview" src="" alt="" />
+          <span class="logo-preview-name" id="logo-file-name"></span>
+          <button class="logo-remove" onclick="removeLogo()">✕ Remove</button>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- Size & Margin -->
+      <div class="field">
+        <label>QR Code Size</label>
+        <div class="size-row">
+          <input type="range" id="qr-size" min="128" max="512" value="256" step="32"
+            oninput="document.getElementById('size-display').textContent=this.value+'×'+this.value+' px'" />
+          <span class="size-val" id="size-display">256×256 px</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Margin (Quiet Zone)</label>
+        <div class="margin-row">
+          <button class="margin-btn selected" data-val="0"  onclick="selectMargin(0,this)">None</button>
+          <button class="margin-btn"           data-val="10" onclick="selectMargin(10,this)">Small</button>
+          <button class="margin-btn"           data-val="20" onclick="selectMargin(20,this)">Medium</button>
+          <button class="margin-btn"           data-val="40" onclick="selectMargin(40,this)">Large</button>
+        </div>
+      </div>
+
+
+      <hr class="section-divider" />
+
+      <!-- Border -->
+      <div class="field">
+        <label>Border Style</label>
+        <div class="border-style-grid" id="border-style-grid">
+          <button class="border-style-btn selected" data-val="none" onclick="selectBorder('none',this)">
+            <svg viewBox="0 0 36 36"><rect x="4" y="4" width="28" height="28" fill="rgba(200,200,200,0.3)" stroke="none"/><line x1="4" y1="4" x2="32" y2="32" stroke="#f87171" stroke-width="2"/><line x1="32" y1="4" x2="4" y2="32" stroke="#f87171" stroke-width="2"/></svg>
+            <span>NONE</span>
+          </button>
+          <button class="border-style-btn" data-val="solid" onclick="selectBorder('solid',this)">
+            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+            <span>SOLID</span>
+          </button>
+          <button class="border-style-btn" data-val="rounded" onclick="selectBorder('rounded',this)">
+            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" rx="10" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+            <span>ROUNDED</span>
+          </button>
+          <button class="border-style-btn" data-val="circle" onclick="selectBorder('circle',this)">
+            <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+            <span>CIRCLE</span>
+          </button>
+          <button class="border-style-btn" data-val="dashed" onclick="selectBorder('dashed',this)">
+            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="6 3"/></svg>
+            <span>DASHED</span>
+          </button>
+          <button class="border-style-btn" data-val="dotted" onclick="selectBorder('dotted',this)">
+            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="2 4"/></svg>
+            <span>DOTTED</span>
+          </button>
+          <button class="border-style-btn" data-val="double" onclick="selectBorder('double',this)">
+            <svg viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="7" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+            <span>DOUBLE</span>
+          </button>
+          <button class="border-style-btn" data-val="shadow" onclick="selectBorder('shadow',this)">
+            <svg viewBox="0 0 36 36"><rect x="5" y="7" width="26" height="26" fill="rgba(0,0,0,0.25)" rx="2"/><rect x="3" y="3" width="26" height="26" fill="rgba(200,200,200,0.6)" stroke="currentColor" stroke-width="1.5" rx="2"/></svg>
+            <span>SHADOW</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="border-options" style="display:none">
+        <div class="field">
+          <label>Border Color</label>
+          <div class="color-row">
+            <div class="color-field">
+              <input type="color" id="border-color" value="#7c3aed" onchange="updateBorderPreview()" />
+              <span class="color-label">Border Color</span>
+            </div>
+            <div class="color-field">
+              <input type="color" id="border-bg-color" value="#ffffff" onchange="updateBorderPreview()" />
+              <span class="color-label">Frame BG</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Border Thickness</label>
+          <div class="size-row">
+            <input type="range" id="border-thickness" min="2" max="30" value="8" step="1"
+              oninput="document.getElementById('border-thick-val').textContent=this.value+'px'; updateBorderPreview()" />
+            <span class="size-val" id="border-thick-val">8px</span>
+          </div>
+        </div>
+
+        <div id="border-radius-field" class="field">
+          <label>Corner Radius</label>
+          <div class="size-row">
+            <input type="range" id="border-radius" min="0" max="60" value="12" step="2"
+              oninput="document.getElementById('border-radius-val').textContent=this.value+'px'; updateBorderPreview()" />
+            <span class="size-val" id="border-radius-val">12px</span>
+          </div>
+        </div>
+
+        <div id="border-gradient-field" class="field">
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Gradient Border</div>
+              <div class="toggle-sub">रंगीत border</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="border-gradient-toggle" onchange="updateBorderPreview()" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div id="border-grad-colors" style="display:none; margin-top:10px">
+            <div class="color-row">
+              <div class="color-field"><input type="color" id="border-grad-c1" value="#7c3aed" onchange="updateBorderPreview()" /><span class="color-label">Color 1</span></div>
+              <div class="color-field"><input type="color" id="border-grad-c2" value="#06b6d4" onchange="updateBorderPreview()" /><span class="color-label">Color 2</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live preview box -->
+        <div class="field">
+          <label>Preview</label>
+          <div class="border-preview-wrap">
+            <div id="border-preview-box">QR</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-generate" onclick="generateQR()">✦ QR Code Generate करा</button>
+    </div>
+
+    <!-- ── OUTPUT ── -->
+    <div class="card qr-output" id="qr-output">
+      <div class="qr-frame"><div id="qrcode"></div></div>
+      <div class="qr-meta" id="qr-meta-text"></div>
+      <div class="qr-actions">
+        <button class="btn-action primary" onclick="downloadQR('png')">⬇ PNG</button>
+        <button class="btn-action primary" onclick="downloadQR('svg')">⬇ SVG</button>
+        <button class="btn-action" onclick="copyQRText()">⎘ Copy Text</button>
+      </div>
+    </div>
+
+
+    <!-- ═══ AD SLOT AD-3 ═══ -->
+    <div class="ad-slot">
+      <!-- ✅ ADSTERRA BANNER AD — AD-3 -->
+      <!-- Replace इथून खाली -->
+      <!-- <script type="text/javascript">
+        atOptions = { 'key': 'YOUR_KEY_AD-3', 'format': 'iframe', 'height': 60, 'width': 468, 'params': {} };
+      </script>
+      <script type="text/javascript" src="//www.highperformanceformat.com/YOUR_KEY_AD-3/invoke.js"></script> -->
+      <!-- Replace इथपर्यंत -->
+      <!-- 👇 Placeholder — real ad code replace करताना हा div काढा -->
+      <div class="ad-placeholder">
+        <span class="ad-label">📢 Adsterra · AD-3</span>
+        <span class="ad-size">Bottom Banner (468×60 / 320×50)</span>
+      </div>
+    </div>
+    <footer>Made with ♥ · Scan करा आणि वापरा</footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let currentTab = 'link';
+    let dotStyle = 'square';
+    let cornerStyle = 'square';
+    let qrMargin = 0;
+    let logoDataUrl = null;
+    let qrInstance = null;
+    let borderStyle = 'none';
+
+    // ── Tab switching ──
+    function switchTab(tab, el) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      ['link','text','wifi','contact','whatsapp'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t===tab ? 'block' : 'none';
+      });
+      currentTab = tab;
+    }
+
+    // ── Style selectors ──
+    function selectStyle(type, val, el) {
+      const grid = document.getElementById(type==='dot' ? 'dot-style-grid' : 'corner-style-grid');
+      grid.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      if (type==='dot') dotStyle = val; else cornerStyle = val;
+    }
+
+    function selectMargin(val, el) {
+      document.querySelectorAll('.margin-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      qrMargin = val;
+    }
+
+    // ── Gradient toggle ──
+    function toggleGradient(cb) {
+      document.getElementById('gradient-colors').classList.toggle('show', cb.checked);
+      document.getElementById('solid-colors').style.display = cb.checked ? 'none' : 'grid';
+    }
+
+    // ── Preset themes ──
+    const presets = {
+      classic:  { fg:'#000000', bg:'#ffffff', g:false },
+      midnight: { fg:'#a78bfa', bg:'#0f0f1a', g:false },
+      fire:     { c1:'#ff6b35', c2:'#f7931e', bg:'#fff8f0', g:true, type:'linear' },
+      ocean:    { c1:'#0077b6', c2:'#00b4d8', bg:'#f0f8ff', g:true, type:'linear' },
+      forest:   { c1:'#1b4332', c2:'#40916c', bg:'#f0faf5', g:true, type:'linear' },
+      candy:    { c1:'#f72585', c2:'#b5179e', bg:'#fff0f8', g:true, type:'radial' },
+      gold:     { c1:'#f9c74f', c2:'#f3722c', bg:'#fffaf0', g:true, type:'linear' },
+      violet:   { c1:'#7c3aed', c2:'#06b6d4', bg:'#f5f0ff', g:true, type:'linear' },
+      bw:       { fg:'#000000', bg:'#ffffff', g:false },
+      custom:   null
+    };
+
+    function applyPreset(name, el) {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      const p = presets[name];
+      if (!p) return; // custom — let user pick
+      const cb = document.getElementById('gradient-toggle');
+      if (p.g) {
+        cb.checked = true; toggleGradient(cb);
+        document.getElementById('grad-c1').value = p.c1;
+        document.getElementById('grad-c2').value = p.c2;
+        document.getElementById('grad-bg').value = p.bg;
+        document.getElementById('grad-type').value = p.type;
+      } else {
+        cb.checked = false; toggleGradient(cb);
+        document.getElementById('qr-fg').value = p.fg;
+        document.getElementById('qr-bg').value = p.bg;
+      }
+    }
+
+    // ── Logo ──
+    function handleLogoUpload(inp) {
+      const file = inp.files[0];
+      if (!file) return;
+      if (file.size > 2*1024*1024) { showToast('⚠ File 2MB पेक्षा जास्त आहे'); return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        logoDataUrl = e.target.result;
+        document.getElementById('logo-img-preview').src = logoDataUrl;
+        document.getElementById('logo-file-name').textContent = file.name;
+        document.getElementById('logo-preview').classList.add('show');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeLogo() {
+      logoDataUrl = null;
+      document.getElementById('logo-input').value = '';
+      document.getElementById('logo-preview').classList.remove('show');
+      showToast('✓ Logo काढला');
+    }
+
+    // ── Content builders ──
+    function buildVCard() {
+      const first = document.getElementById('c-first').value.trim();
+      const last  = document.getElementById('c-last').value.trim();
+      const phone = document.getElementById('c-phone').value.trim();
+      const email = document.getElementById('c-email').value.trim();
+      const org   = document.getElementById('c-org').value.trim();
+      const title = document.getElementById('c-title').value.trim();
+      const url   = document.getElementById('c-url').value.trim();
+      const addr  = document.getElementById('c-addr').value.trim();
+      if (!first || !phone) return '';
+      let v = `BEGIN:VCARD\nVERSION:3.0\nN:${last};${first};;;\nFN:${first}${last?' '+last:''}`;
+      if (org)   v += `\nORG:${org}`;
+      if (title) v += `\nTITLE:${title}`;
+      v += `\nTEL;TYPE=CELL:${phone}`;
+      if (email) v += `\nEMAIL:${email}`;
+      if (url)   v += `\nURL:${url}`;
+      if (addr)  v += `\nADR;TYPE=HOME:;;${addr};;;;`;
+      v += `\nEND:VCARD`;
+      return v;
+    }
+
+    function buildWALink() {
+      const cc    = document.getElementById('wa-country').value;
+      const phone = document.getElementById('wa-phone').value.replace(/\D/g,'');
+      const msg   = document.getElementById('wa-msg').value.trim();
+      if (!phone) return '';
+      const full  = cc + phone;
+      return msg
+        ? 'https://wa.me/' + full + '?text=' + encodeURIComponent(msg)
+        : 'https://wa.me/' + full;
+    }
+
+    function updateWAPreview() {
+      const link = buildWALink();
+      document.getElementById('wa-preview').textContent = link || '\u0928\u0902\u092c\u0930 \u091f\u093e\u0915\u0932\u094d\u092f\u093e\u0935\u0930 link \u0907\u0925\u0947 \u0926\u093f\u0938\u0947\u0932...';
+    }
+
+    function setWATemplate(text) {
+      document.getElementById('wa-msg').value = text;
+      updateWAPreview();
+    }
+
+    function getValue() {
+      if (currentTab==='link')      return { value:document.getElementById('input-link').value.trim(), errId:'err-link' };
+      if (currentTab==='text')      return { value:document.getElementById('input-text').value.trim(), errId:'err-text' };
+      if (currentTab==='contact')   return { value:buildVCard(), errId:'err-contact' };
+      if (currentTab==='whatsapp')  return { value:buildWALink(), errId:'err-whatsapp' };
+      const ssid=document.getElementById('input-ssid').value.trim();
+      const pass=document.getElementById('input-pass').value.trim();
+      const sec=document.getElementById('input-sec').value;
+      return { value: ssid?`WIFI:T:${sec};S:${ssid};P:${pass};;`:'', errId:'err-wifi' };
+    }
+
+    function validate(val) {
+      if (currentTab==='link') { try{new URL(val);return true;}catch{return false;} }
+      return val.length > 0;
+    }
+
+
+    // ── Border ──
+    function selectBorder(val, el) {
+      document.querySelectorAll('.border-style-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      borderStyle = val;
+      const opts = document.getElementById('border-options');
+      const radField = document.getElementById('border-radius-field');
+      opts.style.display = val === 'none' ? 'none' : 'block';
+      radField.style.display = (val === 'circle' || val === 'dashed' || val === 'dotted') ? 'none' : 'block';
+      // hide gradient for shadow/double
+      const gradField = document.getElementById('border-gradient-field');
+      gradField.style.display = (val === 'shadow' || val === 'double') ? 'none' : 'block';
+      updateBorderPreview();
+    }
+
+    document.getElementById('border-gradient-toggle').addEventListener('change', function() {
+      document.getElementById('border-grad-colors').style.display = this.checked ? 'grid' : 'none';
+    });
+
+    function updateBorderPreview() {
+      const box = document.getElementById('border-preview-box');
+      const color  = document.getElementById('border-color').value;
+      const bgCol  = document.getElementById('border-bg-color').value;
+      const thick  = document.getElementById('border-thickness').value;
+      const radius = document.getElementById('border-radius').value;
+      const isGrad = document.getElementById('border-gradient-toggle').checked;
+      const c1 = document.getElementById('border-grad-c1').value;
+      const c2 = document.getElementById('border-grad-c2').value;
+      box.style.cssText = '';
+      box.style.width = '80px'; box.style.height = '80px';
+      box.style.display = 'flex'; box.style.alignItems = 'center'; box.style.justifyContent = 'center';
+      box.style.fontSize = '11px'; box.style.fontFamily = "'DM Mono',monospace";
+      box.style.transition = 'all .3s'; box.style.background = bgCol; box.style.color = '#666';
+
+      if (borderStyle === 'none') { box.style.border = 'none'; return; }
+      if (borderStyle === 'solid') {
+        box.style.border = `${thick}px solid ${color}`;
+        if (isGrad) applyGradBorder(box, thick, radius, c1, c2, 'solid');
+        else box.style.borderRadius = radius + 'px';
+      } else if (borderStyle === 'rounded') {
+        box.style.border = `${thick}px solid ${color}`;
+        box.style.borderRadius = Math.max(12, parseInt(radius)) + 'px';
+        if (isGrad) applyGradBorder(box, thick, Math.max(12, parseInt(radius)), c1, c2, 'solid');
+      } else if (borderStyle === 'circle') {
+        box.style.border = `${thick}px solid ${color}`; box.style.borderRadius = '50%';
+        if (isGrad) applyGradBorder(box, thick, 999, c1, c2, 'solid');
+      } else if (borderStyle === 'dashed') {
+        box.style.border = `${thick}px dashed ${color}`;
+      } else if (borderStyle === 'dotted') {
+        box.style.border = `${thick}px dotted ${color}`;
+      } else if (borderStyle === 'double') {
+        box.style.border = `${parseInt(thick)*3}px double ${color}`;
+        box.style.borderRadius = radius + 'px';
+      } else if (borderStyle === 'shadow') {
+        box.style.border = `${thick}px solid ${color}`;
+        box.style.borderRadius = radius + 'px';
+        box.style.boxShadow = `6px 6px 0px ${color}`;
+      }
+    }
+
+    function applyGradBorder(el, thick, radius, c1, c2) {
+      el.style.border = 'none';
+      el.style.padding = thick + 'px';
+      el.style.background = `linear-gradient(${c1},${c2})`;
+      el.style.borderRadius = radius + 'px';
+      el.innerHTML = `<div style="background:#fff;width:100%;height:100%;border-radius:${Math.max(0,radius-parseInt(thick))}px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'DM Mono',monospace;color:#666">QR</div>`;
+    }
+
+    function getBorderConfig() {
+      return {
+        style:   borderStyle,
+        color:   document.getElementById('border-color').value,
+        bgColor: document.getElementById('border-bg-color').value,
+        thick:   parseInt(document.getElementById('border-thickness').value),
+        radius:  parseInt(document.getElementById('border-radius').value),
+        isGrad:  document.getElementById('border-gradient-toggle').checked,
+        gradC1:  document.getElementById('border-grad-c1').value,
+        gradC2:  document.getElementById('border-grad-c2').value,
+      };
+    }
+
+    // Apply border to canvas and download
+    async function downloadWithBorder(ext) {
+      if (!qrInstance) { showToast('⚠ आधी QR generate करा'); return; }
+      const bc = getBorderConfig();
+      if (bc.style === 'none' || ext === 'svg') {
+        qrInstance.download({ name:'qr-code', extension: ext });
+        showToast(`✓ Download झाला!`); return;
+      }
+      // Get QR as blob → draw on canvas with border
+      const blob = await qrInstance.getRawData('png');
+      const url  = URL.createObjectURL(blob);
+      const img  = new Image();
+      img.onload = () => {
+        const pad   = bc.thick + 20;
+        const total = img.width + pad * 2;
+        const cv    = document.createElement('canvas');
+        cv.width = cv.height = total;
+        const ctx = cv.getContext('2d');
+        const r   = bc.style === 'circle' ? total/2
+                  : bc.style === 'rounded' ? Math.max(16, bc.radius)
+                  : bc.style === 'double'  ? bc.radius
+                  : bc.style === 'shadow'  ? bc.radius : bc.radius;
+        // Background
+        ctx.fillStyle = bc.bgColor;
+        if (bc.style === 'circle') {
+          ctx.beginPath(); ctx.arc(total/2, total/2, total/2, 0, Math.PI*2);
+          ctx.fill();
+        } else { roundRect(ctx, 0, 0, total, total, r, bc.bgColor, null); }
+        // Border
+        if (bc.style === 'shadow') {
+          ctx.fillStyle = bc.color;
+          roundRect(ctx, 8, 8, total, total, r, bc.color, null);
+          roundRect(ctx, 0, 0, total, total, r, bc.bgColor, null);
+        }
+        if (bc.isGrad && (bc.style==='solid'||bc.style==='rounded'||bc.style==='circle')) {
+          const grd = ctx.createLinearGradient(0,0,total,total);
+          grd.addColorStop(0, bc.gradC1); grd.addColorStop(1, bc.gradC2);
+          roundRect(ctx, 0, 0, total, total, r, grd, null);
+          roundRect(ctx, bc.thick, bc.thick, total-bc.thick*2, total-bc.thick*2, Math.max(0,r-bc.thick), bc.bgColor, null);
+        } else if (bc.style !== 'shadow') {
+          const lw = bc.style === 'double' ? bc.thick*3 : bc.thick;
+          ctx.strokeStyle = bc.color; ctx.lineWidth = lw;
+          if (bc.style === 'dashed') ctx.setLineDash([lw*2, lw]);
+          if (bc.style === 'dotted') ctx.setLineDash([1, lw*1.5]);
+          const off = lw/2;
+          if (bc.style === 'circle') {
+            ctx.beginPath(); ctx.arc(total/2, total/2, total/2 - off, 0, Math.PI*2); ctx.stroke();
+          } else if (bc.style === 'double') {
+            ctx.setLineDash([]);
+            roundRect(ctx, off, off, total-lw, total-lw, r, null, bc.color, 1);
+            roundRect(ctx, bc.thick*1.5, bc.thick*1.5, total-bc.thick*3, total-bc.thick*3, Math.max(0,r-bc.thick), null, bc.color, 1);
+          } else {
+            roundRect(ctx, off, off, total-lw, total-lw, r, null, bc.color, lw);
+          }
+        }
+        // Draw QR
+        ctx.drawImage(img, pad, pad);
+        const a = document.createElement('a');
+        a.download = 'qr-code.png';
+        a.href = cv.toDataURL('image/png');
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('✓ Border सहित QR Download झाला!');
+      };
+      img.src = url;
+    }
+
+    function roundRect(ctx, x, y, w, h, r, fill, stroke, lw) {
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.arcTo(x+w, y, x+w, y+h, r);
+      ctx.arcTo(x+w, y+h, x, y+h, r);
+      ctx.arcTo(x, y+h, x, y, r);
+      ctx.arcTo(x, y, x+w, y, r);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; if(lw) ctx.lineWidth=lw; ctx.stroke(); }
+    }
+
+    // ── Main generate ──
+    function generateQR() {
+      document.querySelectorAll('.error-msg').forEach(e => e.classList.remove('show'));
+      const {value, errId} = getValue();
+      if (!validate(value)) { document.getElementById(errId).classList.add('show'); return; }
+
+      const size = parseInt(document.getElementById('qr-size').value);
+      const isGrad = document.getElementById('gradient-toggle').checked;
+      const bg = isGrad
+        ? document.getElementById('grad-bg').value
+        : document.getElementById('qr-bg').value;
+
+      // Build dotsOptions
+      let dotsOptions;
+      if (isGrad) {
+        const c1 = document.getElementById('grad-c1').value;
+        const c2 = document.getElementById('grad-c2').value;
+        const gType = document.getElementById('grad-type').value;
+        dotsOptions = {
+          type: dotStyle,
+          gradient: {
+            type: gType,
+            rotation: 45,
+            colorStops: [{offset:0,color:c1},{offset:1,color:c2}]
+          }
+        };
+      } else {
+        dotsOptions = { type:dotStyle, color:document.getElementById('qr-fg').value };
+      }
+
+      const options = {
+        width: size, height: size,
+        data: value,
+        margin: qrMargin,
+        qrOptions: { errorCorrectionLevel: 'H' },
+        dotsOptions,
+        backgroundOptions: { color: bg },
+        cornersSquareOptions: { type: cornerStyle },
+        cornersDotOptions: { type: cornerStyle === 'dot' ? 'dot' : 'square' },
+      };
+
+      if (logoDataUrl) {
+        options.image = logoDataUrl;
+        options.imageOptions = { crossOrigin:'anonymous', margin:6, imageSize:0.3 };
+      }
+
+      const qrDiv = document.getElementById('qrcode');
+      qrDiv.innerHTML = '';
+      qrInstance = new QRCodeStyling(options);
+      qrInstance.append(qrDiv);
+
+      // Meta label
+      const meta = document.getElementById('qr-meta-text');
+      if (currentTab==='whatsapp') {
+        const ph = document.getElementById('wa-phone').value.trim();
+        const cc = document.getElementById('wa-country').value;
+        meta.textContent = `💬 WhatsApp: +${cc} ${ph}`;
+      } else if (currentTab==='wifi') meta.textContent=`WiFi: ${document.getElementById('input-ssid').value}`;
+      else if (currentTab==='contact') {
+        const f=document.getElementById('c-first').value.trim();
+        const l=document.getElementById('c-last').value.trim();
+        const p=document.getElementById('c-phone').value.trim();
+        meta.textContent=`👤 ${f} ${l} · ${p}`;
+      } else meta.textContent = value.length>60 ? value.slice(0,60)+'...' : value;
+
+      const out = document.getElementById('qr-output');
+      out.classList.add('show');
+      out.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+
+    // ── Download ──
+    function downloadQR(ext) {
+      downloadWithBorder(ext);
+    }
+
+    function copyQRText() {
+      const {value} = getValue();
+      if (!value) { showToast('⚠ काहीच नाही'); return; }
+      navigator.clipboard.writeText(value).then(() => showToast('✓ Text Copy झाला!')).catch(() => showToast('⚠ Copy failed'));
+    }
+
+    function showToast(msg) {
+      const t=document.getElementById('toast');
+      t.textContent=msg; t.classList.add('show');
+      setTimeout(()=>t.classList.remove('show'),2500);
+    }
+
+    document.getElementById('input-link').addEventListener('keydown', e => { if(e.key==='Enter') generateQR(); });
+  </script>
+</body>
+</html>
